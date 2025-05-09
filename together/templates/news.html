@@ -39,6 +39,48 @@
             font-weight: bold;
             color: #2c7873;
         }
+        /* 上传文件相关样式 */
+        .file-upload-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .file-upload-btn {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            cursor: pointer;
+            padding: 8px 12px;
+            background-color: #3a6073;
+            color: white;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .file-upload-btn input[type=file] {
+            position: absolute;
+            top: 0;
+            right: 0;
+            min-width: 100%;
+            min-height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .file-name {
+            margin-left: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .upload-status {
+            font-size: 14px;
+            margin-left: 10px;
+            display: none;
+        }
+        .upload-success {
+            color: #28a745;
+        }
+        .upload-error {
+            color: #dc3545;
+        }
     </style>
 </head>
 <body>
@@ -49,7 +91,7 @@
         </div>
         
         <div class="intro-text">
-            <p>基于Transformer和TextRank的新闻类文章摘要生成，快速获取新闻核心内容。您可以输入文本或随机选择一篇新闻进行摘要生成。</p>
+            <p>基于Transformer和TextRank的新闻类文章摘要生成，快速获取新闻核心内容。您可以输入文本、上传Word文档或随机选择一篇新闻进行摘要生成。</p>
         </div>
         
         <div class="control-panel">
@@ -62,7 +104,18 @@
             <div class="summaries-section">
                 <div class="summary-box input-box">
                     <h2><i class="fas fa-file-alt"></i> 输入文本</h2>
-                    <textarea id="article" class="text-input" placeholder="请在此输入您想要生成摘要的文本，或点击“随机选择新闻”按钮..."></textarea>
+                    
+                    <!-- 添加Word文件上传功能 -->
+                    <div class="file-upload-container">
+                        <label class="file-upload-btn">
+                            <i class="fas fa-file-word"></i> 上传Word文档
+                            <input type="file" id="wordFileInput" accept=".doc,.docx">
+                        </label>
+                        <span id="fileName" class="file-name"></span>
+                        <span id="uploadStatus" class="upload-status"></span>
+                    </div>
+                    
+                    <textarea id="article" class="text-input" placeholder="请在此输入您想要生成摘要的文本，或点击“随机选择新闻”按钮，或上传Word文档..."></textarea>
                 </div>
             </div>
             
@@ -134,6 +187,11 @@
             const loadingOverlay = document.getElementById('loadingOverlay');
             const loadingText = document.getElementById('loadingText');
             
+            // Word文件上传相关元素
+            const wordFileInput = document.getElementById('wordFileInput');
+            const fileName = document.getElementById('fileName');
+            const uploadStatus = document.getElementById('uploadStatus');
+            
             // 记录是否使用随机新闻
             let isRandomNews = false;
             // 记录随机新闻的原文
@@ -204,6 +262,73 @@
                 }
             }
             
+            // 监听Word文件上传事件
+            wordFileInput.addEventListener('change', function(e) {
+                if (this.files.length > 0) {
+                    const file = this.files[0];
+                    fileName.textContent = file.name;
+                    
+                    // 清空之前的状态
+                    uploadStatus.className = 'upload-status';
+                    uploadStatus.style.display = 'none';
+                    
+                    // 准备上传文件
+                    const formData = new FormData();
+                    formData.append('wordFile', file);
+                    formData.append('articleType', 'news'); // 指定文章类型为新闻
+                    
+                    // 显示加载效果
+                    loadingOverlay.style.display = 'flex';
+                    loadingText.textContent = '正在上传并处理Word文档...';
+                    
+                    // 发送上传请求
+                    fetch('/upload_word', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // 标记为不使用随机新闻
+                            isRandomNews = false;
+                            
+                            // 更新文本内容
+                            articleElem.value = data.article;
+                            referenceElem.textContent = ''; // 上传的文件没有参考摘要
+                            mt5SummaryElem.textContent = '';
+                            textRankSummaryElem.textContent = '';
+                            
+                            // 隐藏评估按钮和结果
+                            evalMt5Btn.style.display = 'none';
+                            evalTextRankBtn.style.display = 'none';
+                            mt5EvalResults.style.display = 'none';
+                            textRankEvalResults.style.display = 'none';
+                            
+                            // 显示成功状态
+                            uploadStatus.textContent = '已成功解析文档内容';
+                            uploadStatus.className = 'upload-status upload-success';
+                            uploadStatus.style.display = 'inline';
+                        } else {
+                            // 显示错误状态
+                            uploadStatus.textContent = data.message || '处理文件时出错';
+                            uploadStatus.className = 'upload-status upload-error';
+                            uploadStatus.style.display = 'inline';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        uploadStatus.textContent = '上传文件出错，请查看控制台了解详情';
+                        uploadStatus.className = 'upload-status upload-error';
+                        uploadStatus.style.display = 'inline';
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+                } else {
+                    fileName.textContent = '';
+                }
+            });
+            
             // 监听用户输入变化
             articleElem.addEventListener('input', function() {
                 // 用户修改了文本，表示不再使用随机新闻
@@ -242,6 +367,11 @@
                             evalTextRankBtn.style.display = 'none';
                             mt5EvalResults.style.display = 'none';
                             textRankEvalResults.style.display = 'none';
+                            
+                            // 清空文件上传状态
+                            fileName.textContent = '';
+                            uploadStatus.style.display = 'none';
+                            wordFileInput.value = '';
                         } else {
                             alert('加载新闻失败: ' + data.message);
                         }
@@ -258,7 +388,7 @@
             // 生成Transformer摘要
             mt5Btn.addEventListener('click', function() {
                 if (!articleElem.value.trim()) {
-                    alert('请先输入文本或随机选择一篇新闻');
+                    alert('请先输入文本、上传Word文档或随机选择一篇新闻');
                     return;
                 }
                 
@@ -297,7 +427,7 @@
             // 生成TextRank摘要
             textRankBtn.addEventListener('click', function() {
                 if (!articleElem.value.trim()) {
-                    alert('请先输入文本或随机选择一篇新闻');
+                    alert('请先输入文本、上传Word文档或随机选择一篇新闻');
                     return;
                 }
                 
@@ -340,8 +470,9 @@
                     return;
                 }
                 
-                // 检查是否存在参考摘要，如果不存在则提示用户
-                if (!referenceElem.textContent.trim()) {
+                // 检查是否存在参考摘要，如果不存在则提示用户将采用自评估指标
+                const hasReference = referenceElem.textContent.trim().length > 0;
+                if (!hasReference) {
                     alert('当前文本无参考摘要，将采用自评估指标');
                 }
                 
@@ -366,7 +497,7 @@
                             if (data.evaluation.status === 'success') {
                                 // 检查评估信息中是否包含无参考评估的标志
                                 const isNoReferenceEval = data.evaluation.message === "无参考摘要评估完成";
-                                displayMetrics(data.evaluation.scores, 'mt5Metrics', !isNoReferenceEval);
+                                displayMetrics(data.evaluation.scores, 'mt5Metrics', !isNoReferenceEval && hasReference);
                             } else {
                                 mt5Metrics.innerHTML = `<div class="error-message">${data.evaluation.message}</div>`;
                             }
@@ -390,8 +521,9 @@
                     return;
                 }
                 
-                // 检查是否存在参考摘要，如果不存在则提示用户
-                if (!referenceElem.textContent.trim()) {
+                // 检查是否存在参考摘要，如果不存在则提示用户将采用自评估指标
+                const hasReference = referenceElem.textContent.trim().length > 0;
+                if (!hasReference) {
                     alert('当前文本无参考摘要，将采用自评估指标');
                 }
                 
@@ -416,7 +548,7 @@
                             if (data.evaluation.status === 'success') {
                                 // 检查评估信息中是否包含无参考评估的标志
                                 const isNoReferenceEval = data.evaluation.message === "无参考摘要评估完成";
-                                displayMetrics(data.evaluation.scores, 'textRankMetrics', !isNoReferenceEval);
+                                displayMetrics(data.evaluation.scores, 'textRankMetrics', !isNoReferenceEval && hasReference);
                             } else {
                                 textRankMetrics.innerHTML = `<div class="error-message">${data.evaluation.message}</div>`;
                             }

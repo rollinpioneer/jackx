@@ -6,6 +6,7 @@ import re
 import json
 import sys
 from evaluate_summary import evaluate_from_file, evaluate_summary
+import docx2txt  # 新增：用于解析Word文档
 
 app = Flask(__name__)
 app.static_folder = 'static'
@@ -16,6 +17,12 @@ current_data = {
     "media": {"article": "", "reference": "", "index": -1},
     "encyclopedia": {"article": "", "reference": "", "index": -1}
 }
+
+# 允许上传的文件类型
+ALLOWED_EXTENSIONS = {'docx', 'doc'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def index():
@@ -32,6 +39,73 @@ def media():
 @app.route('/encyclopedia')
 def encyclopedia():
     return render_template('encyclopedia.html')
+
+# 新增：处理Word文件上传
+@app.route('/upload_word', methods=['POST'])
+def upload_word():
+    try:
+        # 检查是否有文件被上传
+        if 'wordFile' not in request.files:
+            return jsonify({"status": "error", "message": "没有选择文件"})
+        
+        file = request.files['wordFile']
+        
+        # 如果用户没有选择文件，浏览器也会提交一个没有文件名的空文件部分
+        if file.filename == '':
+            return jsonify({"status": "error", "message": "没有选择文件"})
+        
+        # 检查文件类型
+        if file and allowed_file(file.filename):
+            # 保存上传的文件到临时路径
+            temp_path = os.path.join(os.path.dirname(__file__), "temp_word_file.docx")
+            file.save(temp_path)
+            
+            # 提取Word文档内容
+            try:
+                text_content = docx2txt.process(temp_path)
+                text_content = clean_sentence_spaces(text_content)
+                
+                # 提取文章类型（新闻、社交媒体或百科知识）
+                article_type = request.form.get('articleType', 'news')
+                
+                # 根据文章类型保存到相应的当前文件
+                if article_type == 'news':
+                    current_file = os.path.join(os.path.dirname(__file__), "current_news.txt")
+                    current_data["news"]["article"] = text_content
+                    current_data["news"]["reference"] = ""
+                    current_data["news"]["index"] = -1
+                elif article_type == 'media':
+                    current_file = os.path.join(os.path.dirname(__file__), "current_media.txt")
+                    current_data["media"]["article"] = text_content
+                    current_data["media"]["reference"] = ""
+                    current_data["media"]["index"] = -1
+                elif article_type == 'encyclopedia':
+                    current_file = os.path.join(os.path.dirname(__file__), "current_encyclopedia.txt")
+                    current_data["encyclopedia"]["article"] = text_content
+                    current_data["encyclopedia"]["reference"] = ""
+                    current_data["encyclopedia"]["index"] = -1
+                
+                # 将提取的文本保存到当前文件
+                with open(current_file, "w", encoding="utf-8") as f:
+                    f.write(f"ARTICLE:{text_content}\n")
+                    f.write(f"REFERENCE:\n")  # 上传的文件没有参考摘要
+                    f.write(f"INDEX:-1\n")
+                
+                # 删除临时文件
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                
+                return jsonify({
+                    "status": "success",
+                    "article": text_content,
+                    "message": "文件上传成功并已提取内容"
+                })
+            except Exception as e:
+                return jsonify({"status": "error", "message": f"处理Word文档时出错: {str(e)}"})
+        else:
+            return jsonify({"status": "error", "message": "不支持的文件类型，请上传.docx或.doc文件"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"上传文件时出错: {str(e)}"})
 
 @app.route('/random_news', methods=['GET'])
 def random_news():

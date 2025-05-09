@@ -35,7 +35,7 @@ def generate_summary_with_api(text):
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": "你是一个专业的中文文本摘要助手，针对百科知识内容生成简明摘要。生成的摘要应当清晰地概括主要概念和关键信息。"},
-                {"role": "user", "content": f"请帮我对下面这段百科知识文本生成简明摘要：{text}"},
+                {"role": "user", "content": f"请帮我对下面这段百科知识文本生成简明摘要，直接生成内容，不要含开头（如摘要：）：{text}"},
             ],
             stream=False
         )
@@ -98,7 +98,52 @@ def main(web_mode=False):
         print(article_text[:200] + "..." if len(article_text) > 200 else article_text)
         print("\n参考摘要：")
         print(reference_summary)
+# # ------ Transformer模型摘要生成 ------
+#     # 加载模型和分词器 - 使用针对百科内容fine-tuned的模型
+#     model_path = os.path.join(os.path.dirname(__file__), "..", "results/baike_wiki-creative/final_model")
+    
+#     # 如果模型路径不存在，使用默认的mT5模型
+#     if not os.path.exists(model_path):
+#         model_path = r"C:\Users\jackx\.cache\huggingface\hub\models--csebuetnlp--mT5_multilingual_XLSum\snapshots\2437a524effdbadc327ced84595508f1e32025b3"
+    
+#     # 加载模型
+#     tokenizer = AutoTokenizer.from_pretrained(model_path)
+#     model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
 
+#     # 检查GPU可用性并将模型加载到GPU
+#     import torch
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     model = model.to(device)
+    
+#     # 生成摘要
+#     input_ids = tokenizer(
+#         [WHITESPACE_HANDLER(article_text)],
+#         return_tensors="pt",
+#         padding="max_length",
+#         truncation=True,
+#         max_length=512
+#     )["input_ids"].to(device)
+
+#     output_ids = model.generate(
+#         input_ids=input_ids,
+#         max_length=100,  # 百科知识摘要可以稍长一些
+#         no_repeat_ngram_size=2,
+#         #num_beams=4
+#         num_beams=6,
+#         length_penalty=1.5
+#     )[0]
+
+#     mt5_summary = tokenizer.decode(
+#         output_ids,
+#         skip_special_tokens=True,
+#         clean_up_tokenization_spaces=False
+#     )
+#     # 清理生成摘要中每个句子前的空格
+#     mt5_summary = clean_sentence_spaces(mt5_summary)
+
+#     if not web_mode:
+#         print("\nTransformer生成的摘要：")
+#         print(mt5_summary)
     # ------ 使用API生成摘要 ------
     print("\n正在使用大模型API生成摘要...")
     mt5_summary = generate_summary_with_api(article_text)

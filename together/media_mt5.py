@@ -89,6 +89,50 @@ def main(web_mode=False):
         print("原文：")
         print(article_text[:200] + "..." if len(article_text) > 200 else article_text)
 
+#   # ------ Transformer模型摘要生成 ------
+#     # 加载模型和分词器 - 使用fine-tuned的模型
+#     model_path = os.path.join(os.path.dirname(__file__), "..", "results/media-creative/final_model")
+    
+#     # 如果模型路径不存在，使用默认的mT5模型
+#     if not os.path.exists(model_path):
+#         model_path = r"C:\Users\jackx\.cache\huggingface\hub\models--csebuetnlp--mT5_multilingual_XLSum\snapshots\2437a524effdbadc327ced84595508f1e32025b3"
+    
+#     # 加载模型
+#     tokenizer = AutoTokenizer.from_pretrained(model_path)
+#     model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+
+#     # 检查GPU可用性并将模型加载到GPU
+#     import torch
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     model = model.to(device)
+    
+#     # 生成摘要
+#     input_ids = tokenizer(
+#         [WHITESPACE_HANDLER(article_text)],
+#         return_tensors="pt",
+#         padding="max_length",
+#         truncation=True,
+#         max_length=512
+#     )["input_ids"].to(device)
+
+#     output_ids = model.generate(
+#         input_ids=input_ids,
+#         max_length=64,  # 社交媒体文本摘要通常更短
+#         no_repeat_ngram_size=2,
+#         num_beams=4
+#     )[0]
+
+#     mt5_summary = tokenizer.decode(
+#         output_ids,
+#         skip_special_tokens=True,
+#         clean_up_tokenization_spaces=False
+#     )
+#     # 清理生成摘要中每个句子前的空格
+#     mt5_summary = clean_sentence_spaces(mt5_summary)
+
+#     if not web_mode:
+#         print("\nTransformer生成的摘要：")
+#         print(mt5_summary)
     # ------ 使用API生成摘要 ------
     print("\n正在使用大模型API生成摘要...")
     mt5_summary = generate_summary_with_api(article_text)
