@@ -4,7 +4,7 @@ import random
 import argparse
 import os
 import pandas as pd
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from openai import OpenAI
 
 # 处理文本中每个句子前的空格
 def clean_sentence_spaces(text):
@@ -26,8 +26,30 @@ def clean_sentence_spaces(text):
     
     return result
 
-# 处理空白的函数
-WHITESPACE_HANDLER = lambda k: re.sub('\s+', ' ', re.sub('\n+', ' ', k.strip()))
+# 使用大模型API生成摘要
+def generate_summary_with_api(text):
+    try:
+        client = OpenAI(api_key="sk-a17fda1fa3bf42e186d7e3868c88f3a8", base_url="https://api.deepseek.com")
+        
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": "你是一个专业的中文文本摘要助手，针对百科知识内容生成简明摘要。生成的摘要应当清晰地概括主要概念和关键信息。"},
+                {"role": "user", "content": f"请帮我对下面这段百科知识文本生成简明摘要：{text}"},
+            ],
+            stream=False
+        )
+        
+        # 获取生成的摘要
+        summary = response.choices[0].message.content.strip()
+        return clean_sentence_spaces(summary)
+    except Exception as e:
+        print(f"调用API生成摘要时出错: {e}")
+        # 如果API调用失败，返回一个简单的摘要（取文本的前部分）
+        summary = text[:min(150, len(text))]
+        if "。" in summary:
+            summary = summary[:summary.rindex("。") + 1]
+        return clean_sentence_spaces(summary)
 
 def main(web_mode=False):
     # 决定是随机选择样本还是使用预先选择的样本
@@ -77,51 +99,12 @@ def main(web_mode=False):
         print("\n参考摘要：")
         print(reference_summary)
 
-    # ------ Transformer模型摘要生成 ------
-    # 加载模型和分词器 - 使用针对百科内容fine-tuned的模型
-    model_path = os.path.join(os.path.dirname(__file__), "..", "results/baike_wiki-creative/final_model")
-    
-    # 如果模型路径不存在，使用默认的mT5模型
-    if not os.path.exists(model_path):
-        model_path = r"C:\Users\jackx\.cache\huggingface\hub\models--csebuetnlp--mT5_multilingual_XLSum\snapshots\2437a524effdbadc327ced84595508f1e32025b3"
-    
-    # 加载模型
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
-
-    # 检查GPU可用性并将模型加载到GPU
-    import torch
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    
-    # 生成摘要
-    input_ids = tokenizer(
-        [WHITESPACE_HANDLER(article_text)],
-        return_tensors="pt",
-        padding="max_length",
-        truncation=True,
-        max_length=512
-    )["input_ids"].to(device)
-
-    output_ids = model.generate(
-        input_ids=input_ids,
-        max_length=100,  # 百科知识摘要可以稍长一些
-        no_repeat_ngram_size=2,
-        #num_beams=4
-        num_beams=6,
-        length_penalty=1.5
-    )[0]
-
-    mt5_summary = tokenizer.decode(
-        output_ids,
-        skip_special_tokens=True,
-        clean_up_tokenization_spaces=False
-    )
-    # 清理生成摘要中每个句子前的空格
-    mt5_summary = clean_sentence_spaces(mt5_summary)
+    # ------ 使用API生成摘要 ------
+    print("\n正在使用大模型API生成摘要...")
+    mt5_summary = generate_summary_with_api(article_text)
 
     if not web_mode:
-        print("\nTransformer生成的摘要：")
+        print("\nAPI生成的摘要：")
         print(mt5_summary)
 
     # 将结果保存到文件，供评估程序使用
@@ -135,7 +118,7 @@ def main(web_mode=False):
         print("\n数据已保存到encyclopedia_mt5_summary.txt文件")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='生成百科知识Transformer摘要')
+    parser = argparse.ArgumentParser(description='生成百科知识摘要')
     parser.add_argument('--web_mode', action='store_true', help='是否以Web模式运行')
     args = parser.parse_args()
     
