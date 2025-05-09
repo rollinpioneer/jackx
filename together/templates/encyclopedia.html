@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>百科知识文本摘要生成</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-book"></i> 百科知识文本摘要生成</h1>
+            <a href="/" class="home-link"><i class="fas fa-home"></i> 返回首页</a>
+        </div>
+        
+        <div class="intro-text">
+            <p>基于Transformer和TextRank的百科知识文章摘要生成，快速理解复杂知识。您可以输入文本或随机选择一篇百科文章进行摘要生成。</p>
+        </div>
+        
+        <div class="control-panel">
+            <button id="randomBtn" class="btn"><i class="fas fa-random"></i> 随机选择百科文章</button>
+            <button id="mt5Btn" class="btn"><i class="fas fa-robot"></i> 生成Transformer摘要</button>
+            <button id="textRankBtn" class="btn"><i class="fas fa-project-diagram"></i> 生成TextRank摘要</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="summaries-section">
+                <div class="summary-box input-box">
+                    <h2><i class="fas fa-file-alt"></i> 输入文本</h2>
+                    <textarea id="article" class="text-input" placeholder="请在此输入您想要生成摘要的百科文本，或点击“随机选择百科文章”按钮..."></textarea>
+                </div>
+            </div>
+            
+            <div class="summaries-section">
+                <div class="summary-box">
+                    <h2><i class="fas fa-bookmark"></i> 参考摘要</h2>
+                    <div id="reference" class="text-box"></div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2><i class="fas fa-brain"></i> Transformer摘要</h2>
+                    <div id="mt5Summary" class="text-box"></div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2><i class="fas fa-network-wired"></i> TextRank摘要</h2>
+                    <div id="textRankSummary" class="text-box"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p id="loadingText">处理中...</p>
+        </div>
+        
+        <footer class="footer">
+            <p>© 2025 文本摘要生成系统 | 基于先进NLP技术</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const randomBtn = document.getElementById('randomBtn');
+            const mt5Btn = document.getElementById('mt5Btn');
+            const textRankBtn = document.getElementById('textRankBtn');
+            
+            const articleElem = document.getElementById('article');
+            const referenceElem = document.getElementById('reference');
+            const mt5SummaryElem = document.getElementById('mt5Summary');
+            const textRankSummaryElem = document.getElementById('textRankSummary');
+            
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            // 监听用户输入变化
+            articleElem.addEventListener('input', function() {
+                // 用户输入时清空其他区域
+                referenceElem.textContent = '';
+                mt5SummaryElem.textContent = '';
+                textRankSummaryElem.textContent = '';
+            });
+            
+            // 随机选择百科文章
+            randomBtn.addEventListener('click', function() {
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在加载百科文章...';
+                
+                fetch('/random_encyclopedia')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            articleElem.value = data.article;
+                            referenceElem.textContent = data.reference;
+                            mt5SummaryElem.textContent = '';
+                            textRankSummaryElem.textContent = '';
+                        } else {
+                            alert('加载百科文章失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('加载百科文章出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 生成Transformer摘要
+            mt5Btn.addEventListener('click', function() {
+                if (!articleElem.value.trim()) {
+                    alert('请先输入文本或随机选择一篇百科文章');
+                    return;
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在生成Transformer摘要...';
+                
+                fetch('/generate_encyclopedia_mt5', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        use_user_input: true,
+                        user_text: articleElem.value
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            mt5SummaryElem.textContent = data.mt5_summary;
+                        } else {
+                            alert('生成Transformer摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('生成Transformer摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 生成TextRank摘要
+            textRankBtn.addEventListener('click', function() {
+                if (!articleElem.value.trim()) {
+                    alert('请先输入文本或随机选择一篇百科文章');
+                    return;
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在生成TextRank摘要...';
+                
+                fetch('/generate_encyclopedia_textrank', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        use_user_input: true,
+                        user_text: articleElem.value
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            textRankSummaryElem.textContent = data.textrank_summary;
+                        } else {
+                            alert('生成TextRank摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('生成TextRank摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>新闻文本摘要生成</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .evaluation-btn {
+            background-color: #2c7873;
+            margin-top: 10px;
+        }
+        .eval-results {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .eval-chart {
+            max-width: 100%;
+            margin: 15px auto;
+            display: block;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .metric-item {
+            background-color: #fff;
+            padding: 8px 12px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .metric-value {
+            font-weight: bold;
+            color: #2c7873;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-newspaper"></i> 新闻文本摘要生成</h1>
+            <a href="/" class="home-link"><i class="fas fa-home"></i> 返回首页</a>
+        </div>
+        
+        <div class="intro-text">
+            <p>基于Transformer和TextRank的新闻类文章摘要生成，快速获取新闻核心内容。您可以输入文本或随机选择一篇新闻进行摘要生成。</p>
+        </div>
+        
+        <div class="control-panel">
+            <button id="randomBtn" class="btn"><i class="fas fa-random"></i> 随机选择新闻</button>
+            <button id="mt5Btn" class="btn"><i class="fas fa-robot"></i> 生成Transformer摘要</button>
+            <button id="textRankBtn" class="btn"><i class="fas fa-project-diagram"></i> 生成TextRank摘要</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="summaries-section">
+                <div class="summary-box input-box">
+                    <h2><i class="fas fa-file-alt"></i> 输入文本</h2>
+                    <textarea id="article" class="text-input" placeholder="请在此输入您想要生成摘要的文本，或点击“随机选择新闻”按钮..."></textarea>
+                </div>
+            </div>
+            
+            <div class="summaries-section">
+                <div class="summary-box">
+                    <h2><i class="fas fa-bookmark"></i> 参考摘要</h2>
+                    <div id="reference" class="text-box"></div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2><i class="fas fa-brain"></i> Transformer摘要</h2>
+                    <div id="mt5Summary" class="text-box"></div>
+                    <button id="evalMt5Btn" class="btn evaluation-btn" style="display: none;"><i class="fas fa-chart-line"></i> 评估摘要质量</button>
+                    <div id="mt5EvalResults" class="eval-results">
+                        <h3><i class="fas fa-chart-bar"></i> 评估结果</h3>
+                        <img id="mt5EvalChart" class="eval-chart" alt="评估图表" />
+                        <div class="metrics-grid" id="mt5Metrics"></div>
+                    </div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2><i class="fas fa-network-wired"></i> TextRank摘要</h2>
+                    <div id="textRankSummary" class="text-box"></div>
+                    <button id="evalTextRankBtn" class="btn evaluation-btn" style="display: none;"><i class="fas fa-chart-line"></i> 评估摘要质量</button>
+                    <div id="textRankEvalResults" class="eval-results">
+                        <h3><i class="fas fa-chart-bar"></i> 评估结果</h3>
+                        <img id="textRankEvalChart" class="eval-chart" alt="评估图表" />
+                        <div class="metrics-grid" id="textRankMetrics"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p id="loadingText">处理中...</p>
+        </div>
+        
+        <footer class="footer">
+            <p>© 2025 文本摘要生成系统 | 基于先进NLP技术</p>
+        </footer>
+    </div>
+
+    <!-- 雷达图放大模态框 -->
+    <div id="radarModal" style="display:none;position:fixed;z-index:9999;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;">
+        <img id="radarModalImg" src="" style="max-width:90vw;max-height:90vh;box-shadow:0 0 20px #fff;border-radius:8px;" />
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const randomBtn = document.getElementById('randomBtn');
+            const mt5Btn = document.getElementById('mt5Btn');
+            const textRankBtn = document.getElementById('textRankBtn');
+            const evalMt5Btn = document.getElementById('evalMt5Btn');
+            const evalTextRankBtn = document.getElementById('evalTextRankBtn');
+            
+            const articleElem = document.getElementById('article');
+            const referenceElem = document.getElementById('reference');
+            const mt5SummaryElem = document.getElementById('mt5Summary');
+            const textRankSummaryElem = document.getElementById('textRankSummary');
+            
+            const mt5EvalResults = document.getElementById('mt5EvalResults');
+            const textRankEvalResults = document.getElementById('textRankEvalResults');
+            const mt5EvalChart = document.getElementById('mt5EvalChart');
+            const textRankEvalChart = document.getElementById('textRankEvalChart');
+            const mt5Metrics = document.getElementById('mt5Metrics');
+            const textRankMetrics = document.getElementById('textRankMetrics');
+            
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            
+            // 记录是否使用随机新闻
+            let isRandomNews = false;
+            // 记录随机新闻的原文
+            let randomNewsText = '';
+            
+            // 放大雷达图相关
+            const radarModal = document.getElementById('radarModal');
+            const radarModalImg = document.getElementById('radarModalImg');
+            function showRadarModal(src) {
+                radarModalImg.src = src;
+                radarModal.style.display = 'flex';
+            }
+            function hideRadarModal() {
+                radarModal.style.display = 'none';
+                radarModalImg.src = '';
+            }
+            mt5EvalChart.addEventListener('click', function() {
+                if (mt5EvalChart.src) showRadarModal(mt5EvalChart.src);
+            });
+            textRankEvalChart.addEventListener('click', function() {
+                if (textRankEvalChart.src) showRadarModal(textRankEvalChart.src);
+            });
+            radarModal.addEventListener('click', hideRadarModal);
+            
+            // 显示评估指标的函数 - 根据是否有参考摘要选择不同的指标名称显示
+            function displayMetrics(metrics, containerId, hasReference = true) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                
+                // 根据是否有参考摘要显示不同的指标
+                if (hasReference) {
+                    // 有参考摘要 - 显示标准指标
+                    const mainMetrics = [
+                        { name: "综合评分", value: metrics.comprehensive_score.toFixed(4) },
+                        { name: "ROUGE-1", value: metrics["rouge-1"].f.toFixed(4) },
+                        { name: "ROUGE-2", value: metrics["rouge-2"].f.toFixed(4) },
+                        { name: "ROUGE-L", value: metrics["rouge-l"].f.toFixed(4) },
+                        { name: "BLEU", value: metrics.bleu.toFixed(4) },
+                        { name: "关键词覆盖率", value: metrics.keyword_coverage.toFixed(4) },
+                        { name: "长度比例", value: metrics.length_ratio.toFixed(4) },
+                        { name: "简洁性", value: metrics.conciseness.toFixed(4) }
+                    ];
+                    
+                    mainMetrics.forEach(metric => {
+                        const metricItem = document.createElement('div');
+                        metricItem.className = 'metric-item';
+                        metricItem.innerHTML = `${metric.name}: <span class="metric-value">${metric.value}</span>`;
+                        container.appendChild(metricItem);
+                    });
+                } else {
+                    // 无参考摘要 - 显示自评估指标
+                    const selfEvalMetrics = [
+                        { name: "综合评分", value: metrics.comprehensive_score.toFixed(4) },
+                        { name: "关键词覆盖率", value: metrics.keyword_coverage.toFixed(4) },
+                        { name: "信息密度", value: metrics.information_density ? metrics.information_density.toFixed(4) : metrics["rouge-2"].f.toFixed(4) },
+                        { name: "连贯性", value: metrics.coherence ? metrics.coherence.toFixed(4) : metrics["rouge-l"].f.toFixed(4) },
+                        { name: "词汇多样性", value: metrics.lexical_diversity ? metrics.lexical_diversity.toFixed(4) : metrics.bleu.toFixed(4) },
+                        { name: "长度比例", value: metrics.length_ratio.toFixed(4) },
+                        { name: "简洁性", value: metrics.conciseness.toFixed(4) }
+                    ];
+                    
+                    selfEvalMetrics.forEach(metric => {
+                        const metricItem = document.createElement('div');
+                        metricItem.className = 'metric-item';
+                        metricItem.innerHTML = `${metric.name}: <span class="metric-value">${metric.value}</span>`;
+                        container.appendChild(metricItem);
+                    });
+                }
+            }
+            
+            // 监听用户输入变化
+            articleElem.addEventListener('input', function() {
+                // 用户修改了文本，表示不再使用随机新闻
+                if (isRandomNews && articleElem.value !== randomNewsText) {
+                    isRandomNews = false;
+                }
+                
+                // 用户输入时清空其他区域
+                referenceElem.textContent = '';
+                mt5SummaryElem.textContent = '';
+                textRankSummaryElem.textContent = '';
+                evalMt5Btn.style.display = 'none';
+                evalTextRankBtn.style.display = 'none';
+                mt5EvalResults.style.display = 'none';
+                textRankEvalResults.style.display = 'none';
+            });
+            
+            // 随机选择新闻
+            randomBtn.addEventListener('click', function() {
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在加载新闻...';
+                
+                fetch('/random_news')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // 标记为使用随机新闻
+                            isRandomNews = true;
+                            randomNewsText = data.article;
+                            
+                            articleElem.value = data.article;
+                            referenceElem.textContent = data.reference;
+                            mt5SummaryElem.textContent = '';
+                            textRankSummaryElem.textContent = '';
+                            evalMt5Btn.style.display = 'none';
+                            evalTextRankBtn.style.display = 'none';
+                            mt5EvalResults.style.display = 'none';
+                            textRankEvalResults.style.display = 'none';
+                        } else {
+                            alert('加载新闻失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('加载新闻出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 生成Transformer摘要
+            mt5Btn.addEventListener('click', function() {
+                if (!articleElem.value.trim()) {
+                    alert('请先输入文本或随机选择一篇新闻');
+                    return;
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在生成Transformer摘要...';
+                
+                fetch('/generate_news_mt5', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        use_user_input: !isRandomNews, // 只有不是随机新闻时才标记为用户输入
+                        user_text: articleElem.value
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            mt5SummaryElem.textContent = data.mt5_summary;
+                            evalMt5Btn.style.display = 'block';
+                            mt5EvalResults.style.display = 'none';
+                        } else {
+                            alert('生成Transformer摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('生成Transformer摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 生成TextRank摘要
+            textRankBtn.addEventListener('click', function() {
+                if (!articleElem.value.trim()) {
+                    alert('请先输入文本或随机选择一篇新闻');
+                    return;
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在生成TextRank摘要...';
+                
+                fetch('/generate_news_textrank', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        use_user_input: !isRandomNews, // 只有不是随机新闻时才标记为用户输入
+                        user_text: articleElem.value
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            textRankSummaryElem.textContent = data.textrank_summary;
+                            evalTextRankBtn.style.display = 'block';
+                            textRankEvalResults.style.display = 'none';
+                        } else {
+                            alert('生成TextRank摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('生成TextRank摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 评估Transformer摘要
+            evalMt5Btn.addEventListener('click', function() {
+                if (!mt5SummaryElem.textContent.trim()) {
+                    alert('请先生成Transformer摘要');
+                    return;
+                }
+                
+                // 检查是否存在参考摘要，如果不存在则提示用户
+                if (!referenceElem.textContent.trim()) {
+                    alert('当前文本无参考摘要，将采用自评估指标');
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在评估Transformer摘要...';
+                
+                fetch('/evaluate_news_mt5', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            mt5EvalResults.style.display = 'block';
+                            
+                            // 显示评估图表
+                            mt5EvalChart.src = data.chart_url;
+                            
+                            // 显示评估指标 - 判断是否是无参考摘要评估
+                            if (data.evaluation.status === 'success') {
+                                // 检查评估信息中是否包含无参考评估的标志
+                                const isNoReferenceEval = data.evaluation.message === "无参考摘要评估完成";
+                                displayMetrics(data.evaluation.scores, 'mt5Metrics', !isNoReferenceEval);
+                            } else {
+                                mt5Metrics.innerHTML = `<div class="error-message">${data.evaluation.message}</div>`;
+                            }
+                        } else {
+                            alert('评估摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('评估摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+            
+            // 评估TextRank摘要
+            evalTextRankBtn.addEventListener('click', function() {
+                if (!textRankSummaryElem.textContent.trim()) {
+                    alert('请先生成TextRank摘要');
+                    return;
+                }
+                
+                // 检查是否存在参考摘要，如果不存在则提示用户
+                if (!referenceElem.textContent.trim()) {
+                    alert('当前文本无参考摘要，将采用自评估指标');
+                }
+                
+                loadingOverlay.style.display = 'flex';
+                loadingText.textContent = '正在评估TextRank摘要...';
+                
+                fetch('/evaluate_news_textrank', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            textRankEvalResults.style.display = 'block';
+                            
+                            // 显示评估图表
+                            textRankEvalChart.src = data.chart_url;
+                            
+                            // 显示评估指标 - 判断是否是无参考摘要评估
+                            if (data.evaluation.status === 'success') {
+                                // 检查评估信息中是否包含无参考评估的标志
+                                const isNoReferenceEval = data.evaluation.message === "无参考摘要评估完成";
+                                displayMetrics(data.evaluation.scores, 'textRankMetrics', !isNoReferenceEval);
+                            } else {
+                                textRankMetrics.innerHTML = `<div class="error-message">${data.evaluation.message}</div>`;
+                            }
+                        } else {
+                            alert('评估摘要失败: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('评估摘要出错，请查看控制台了解详情');
+                    })
+                    .finally(() => {
+                        loadingOverlay.style.display = 'none';
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

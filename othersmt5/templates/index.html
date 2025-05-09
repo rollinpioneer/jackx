@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本摘要生成与评估系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>文本摘要生成与评估系统</h1>
+        
+        <div class="control-panel">
+            <button id="randomBtn" class="btn">随机选择文章</button>
+            <button id="mt5Btn" class="btn" disabled>生成mT5摘要</button>
+            <button id="textRankBtn" class="btn" disabled>生成TextRank摘要</button>
+            <button id="evaluateBtn" class="btn" disabled>评估结果</button>
+        </div>
+        
+        <div class="main-content">
+            <div class="text-section">
+                <h2>原文</h2>
+                <div id="article" class="text-box"></div>
+            </div>
+            
+            <div class="summaries-section">
+                <div class="summary-box">
+                    <h2>参考摘要</h2>
+                    <div id="reference" class="text-box"></div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2>mT5摘要</h2>
+                    <div id="mt5Summary" class="text-box"></div>
+                </div>
+                
+                <div class="summary-box">
+                    <h2>TextRank摘要</h2>
+                    <div id="textRankSummary" class="text-box"></div>
+                </div>
+            </div>
+            
+            <div class="evaluation-section" id="evaluationSection">
+                <h2>评估结果</h2>
+                <div id="evaluationResults" class="result-box"></div>
+                <div id="chartContainer">
+                    <img id="evaluationChart" src="" alt="评估结果图表" style="display: none;">
+                </div>
+            </div>
+        </div>
+        
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p id="loadingText">处理中...</p>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

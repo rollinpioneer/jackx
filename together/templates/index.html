@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文本摘要生成系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <div class="hero-section">
+            <h1>文本摘要生成系统</h1>
+            <p class="hero-subtitle">基于先进的人工智能技术，为您提供高质量的文本摘要服务</p>
+        </div>
+        
+        <div class="feature-selection">
+            <div class="feature-card" onclick="window.location.href='/news'">
+                <div class="card-icon">
+                    <i class="fas fa-newspaper"></i>
+                </div>
+                <div class="card-content">
+                    <h2>新闻文本摘要生成</h2>
+                    <p>基于Transformer和TextRank的新闻类文章摘要生成，快速获取新闻核心内容</p>
+                    <div class="card-button">
+                        <span>开始使用 <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="feature-card" onclick="window.location.href='/media'">
+                <div class="card-icon">
+                    <i class="fas fa-share-alt"></i>
+                </div>
+                <div class="card-content">
+                    <h2>社交媒体文章摘要生成</h2>
+                    <p>基于Transformer和TextRank的社交媒体文章摘要生成，提炼社交媒体内容精华</p>
+                    <div class="card-button">
+                        <span>开始使用 <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="feature-card" onclick="window.location.href='/encyclopedia'">
+                <div class="card-icon">
+                    <i class="fas fa-book"></i>
+                </div>
+                <div class="card-content">
+                    <h2>百科知识文本摘要生成</h2>
+                    <p>基于Transformer和TextRank的百科知识文章摘要生成，快速理解复杂知识</p>
+                    <div class="card-button">
+                        <span>开始使用 <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="footer">
+            <p>© 2025 文本摘要生成系统 | 基于先进NLP技术</p>
+        </footer>
+    </div>
+</body>
+</html>
