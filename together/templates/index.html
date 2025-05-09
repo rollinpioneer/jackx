@@ -6,6 +6,82 @@
     <title>文本摘要生成系统</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .ai-assistant-card {
+            position: fixed;
+            right: -250px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 300px;
+            background: linear-gradient(135deg, #8e44ad, #3498db);
+            border-radius: 15px 0 0 15px;
+            padding: 20px;
+            box-shadow: -5px 0 15px rgba(0, 0, 0, 0.2);
+            transition: right 0.3s ease-in-out;
+            z-index: 100;
+            cursor: pointer;
+            color: white;
+            text-align: center;
+        }
+        
+        .ai-assistant-card:hover {
+            right: 0;
+        }
+        
+        .ai-assistant-card .card-icon {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+        }
+        
+        .ai-assistant-card .card-icon i {
+            font-size: 30px;
+            color: white;
+        }
+        
+        .ai-assistant-card h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .ai-assistant-card p {
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .ai-assistant-card .card-button {
+            background: rgba(255, 255, 255, 0.25);
+            padding: 8px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            transition: background 0.3s;
+        }
+        
+        .ai-assistant-card .card-button:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        
+        .ai-assistant-tab {
+            position: absolute;
+            left: -30px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #8e44ad, #3498db);
+            padding: 15px 10px;
+            border-radius: 10px 0 0 10px;
+            box-shadow: -5px 0 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .ai-assistant-tab i {
+            font-size: 20px;
+            color: white;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -52,6 +128,21 @@
                         <span>开始使用 <i class="fas fa-arrow-right"></i></span>
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        <!-- 自定义文本摘要与问答卡片 - 侧边悬浮样式 -->
+        <div class="ai-assistant-card" onclick="window.location.href='/custom'">
+            <div class="ai-assistant-tab">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="card-icon">
+                <i class="fas fa-magic"></i>
+            </div>
+            <h2>AI助手</h2>
+            <p>没有想处理的内容？AI助手来帮忙！基于DeepSeek AI的通用摘要与问答服务</p>
+            <div class="card-button">
+                <span>立即体验 <i class="fas fa-arrow-right"></i></span>
             </div>
         </div>
         

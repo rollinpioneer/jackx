@@ -7,6 +7,7 @@ import json
 import sys
 from evaluate_summary import evaluate_from_file, evaluate_summary
 import docx2txt  # 新增：用于解析Word文档
+from openai import OpenAI  # 导入OpenAI库用于调用DeepSeek API
 
 app = Flask(__name__)
 app.static_folder = 'static'
@@ -15,7 +16,8 @@ app.static_folder = 'static'
 current_data = {
     "news": {"article": "", "reference": "", "index": -1},
     "media": {"article": "", "reference": "", "index": -1},
-    "encyclopedia": {"article": "", "reference": "", "index": -1}
+    "encyclopedia": {"article": "", "reference": "", "index": -1},
+    "custom": {"article": "", "index": -1}
 }
 
 # 允许上传的文件类型
@@ -39,6 +41,75 @@ def media():
 @app.route('/encyclopedia')
 def encyclopedia():
     return render_template('encyclopedia.html')
+
+@app.route('/custom')
+def custom():
+    return render_template('custom.html')
+
+# 新增：处理自定义文本处理请求
+@app.route('/process_custom_text', methods=['POST'])
+def process_custom_text():
+    try:
+        # 获取请求数据
+        data = request.json
+        text = data.get('text', '')
+        mode = data.get('mode', 'summary')
+        prompt = data.get('prompt', '')
+        
+        if not text:
+            return jsonify({"status": "error", "message": "未提供文本内容"})
+        
+        # 根据不同模式设置系统提示和用户提示
+        system_prompts = {
+            'summary': "你是一个专业的中文文本摘要助手，只输出简明摘要。",
+            'qa': "你是一个专业的文本问答助手，请基于提供的文本回答问题，不要编造信息。",
+            'analysis': "你是一个专业的文本分析师，请对提供的文本进行全面分析，包括主题、结构、观点、语言特点等。",
+            'key_points': "你是一个专业的文本提炼专家，请从提供的文本中提取5-10个关键点，用简洁的要点形式列出。"
+        }
+        
+        user_prompts = {
+            'summary': f"请帮我对下面这段文本生成简明摘要：\n{text}",
+            'qa': f"文本内容：\n{text}\n\n问题：{prompt}",
+            'analysis': f"请分析以下文本的内容特点、主要观点和写作手法：\n{text}",
+            'key_points': f"请从以下文本中提取核心关键点，以要点列表形式呈现：\n{text}"
+        }
+        
+        # 选择对应的提示
+        system_prompt = system_prompts.get(mode, system_prompts['summary'])
+        user_prompt = user_prompts.get(mode, user_prompts['summary'])
+        
+        # 调用DeepSeek API
+        result = generate_with_deepseek(system_prompt, user_prompt)
+        
+        return jsonify({
+            "status": "success",
+            "result": result
+        })
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        return jsonify({"status": "error", "message": f"处理文本时出错: {str(e)}\n{error_details}"})
+
+# 使用DeepSeek API生成内容
+def generate_with_deepseek(system_prompt, user_prompt):
+    try:
+        client = OpenAI(api_key="sk-a17fda1fa3bf42e186d7e3868c88f3a8", base_url="https://api.deepseek.com")
+        
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            stream=False
+        )
+        
+        # 获取生成的文本
+        generated_text = response.choices[0].message.content.strip()
+        return generated_text
+    except Exception as e:
+        print(f"调用DeepSeek API时出错: {e}")
+        raise e
 
 # 新增：处理Word文件上传
 @app.route('/upload_word', methods=['POST'])
@@ -65,7 +136,7 @@ def upload_word():
                 text_content = docx2txt.process(temp_path)
                 text_content = clean_sentence_spaces(text_content)
                 
-                # 提取文章类型（新闻、社交媒体或百科知识）
+                # 提取文章类型
                 article_type = request.form.get('articleType', 'news')
                 
                 # 根据文章类型保存到相应的当前文件
@@ -84,11 +155,16 @@ def upload_word():
                     current_data["encyclopedia"]["article"] = text_content
                     current_data["encyclopedia"]["reference"] = ""
                     current_data["encyclopedia"]["index"] = -1
+                elif article_type == 'custom':
+                    current_file = os.path.join(os.path.dirname(__file__), "current_custom.txt")
+                    current_data["custom"]["article"] = text_content
+                    current_data["custom"]["index"] = -1
                 
                 # 将提取的文本保存到当前文件
                 with open(current_file, "w", encoding="utf-8") as f:
                     f.write(f"ARTICLE:{text_content}\n")
-                    f.write(f"REFERENCE:\n")  # 上传的文件没有参考摘要
+                    if article_type != 'custom' and article_type != 'media':
+                        f.write(f"REFERENCE:\n")  # 上传的文件没有参考摘要
                     f.write(f"INDEX:-1\n")
                 
                 # 删除临时文件
