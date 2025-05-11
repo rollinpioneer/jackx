@@ -293,20 +293,16 @@ def generate_evaluation_chart(scores):
     matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 支持中文
     matplotlib.rcParams['axes.unicode_minus'] = False
 
-    # 提取要在雷达图中显示的指标
+    # 提取要在雷达图中显示的指标 - 只显示三个指标
     metrics = [
-        'ROUGE-1', 'ROUGE-2', 'ROUGE-L', 
-        'BLEU', '关键词覆盖率', '长度比例', '简洁性', '综合评分'
+        '关键词覆盖率', '长度比例', '简洁性'
     ]
+    
+    # 对应的值
     values = [
-        scores['rouge-1']['f'], 
-        scores['rouge-2']['f'], 
-        scores['rouge-l']['f'], 
-        scores['bleu'],
         scores['keyword_coverage'],
         scores['length_ratio'],
-        scores['conciseness'],
-        scores['comprehensive_score']
+        scores['conciseness']
     ]
     
     # 创建雷达图
@@ -347,7 +343,7 @@ def generate_evaluation_chart(scores):
     plt.savefig(os.path.join(static_dir, 'summary_eval_chart.png'), dpi=100)
     plt.close()
     
-    # 保存评估结果到JSON文件
+    # 在JSON文件中保存原始分数，前端可以根据需要决定显示方式
     with open(os.path.join(os.path.dirname(__file__), 'summary_eval_results.json'), 'w', encoding='utf-8') as f:
         json.dump(scores, f, ensure_ascii=False, indent=4)
 
@@ -357,19 +353,14 @@ def generate_evaluation_chart_no_reference(scores):
     matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 支持中文
     matplotlib.rcParams['axes.unicode_minus'] = False
 
-    # 提取要在雷达图中显示的指标 - 使用自定义指标名称
+    # 提取要在雷达图中显示的指标 - 只显示三个指标
     metrics = [
-        '关键词覆盖率', '信息密度', '连贯性', 
-        '词汇多样性', '长度比例', '简洁性', '综合评分'
+        '关键词覆盖率', '长度比例', '简洁性'
     ]
     values = [
         scores['keyword_coverage'],
-        scores['information_density'],  # 使用新字段名
-        scores['coherence'],            # 使用新字段名
-        scores['lexical_diversity'],    # 使用新字段名
         scores['length_ratio'], 
-        scores['conciseness'],
-        scores['comprehensive_score']
+        scores['conciseness']
     ]
     
     # 创建雷达图

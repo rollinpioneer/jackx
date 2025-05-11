@@ -223,13 +223,11 @@
                 
                 // 根据是否有参考摘要显示不同的指标
                 if (hasReference) {
-                    // 有参考摘要 - 显示标准指标
+                    // 有参考摘要 - 显示标准指标，ROUGE值乘以100，不显示综合评分和BLEU
                     const mainMetrics = [
-                        { name: "综合评分", value: metrics.comprehensive_score.toFixed(4) },
-                        { name: "ROUGE-1", value: metrics["rouge-1"].f.toFixed(4) },
-                        { name: "ROUGE-2", value: metrics["rouge-2"].f.toFixed(4) },
-                        { name: "ROUGE-L", value: metrics["rouge-l"].f.toFixed(4) },
-                        { name: "BLEU", value: metrics.bleu.toFixed(4) },
+                        { name: "ROUGE-1", value: (metrics["rouge-1"].f * 100).toFixed(2)},
+                        { name: "ROUGE-2", value: (metrics["rouge-2"].f * 100).toFixed(2)},
+                        { name: "ROUGE-L", value: (metrics["rouge-l"].f * 100).toFixed(2)},
                         { name: "关键词覆盖率", value: metrics.keyword_coverage.toFixed(4) },
                         { name: "长度比例", value: metrics.length_ratio.toFixed(4) },
                         { name: "简洁性", value: metrics.conciseness.toFixed(4) }
