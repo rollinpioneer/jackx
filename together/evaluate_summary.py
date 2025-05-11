@@ -353,12 +353,16 @@ def generate_evaluation_chart_no_reference(scores):
     matplotlib.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 支持中文
     matplotlib.rcParams['axes.unicode_minus'] = False
 
-    # 提取要在雷达图中显示的指标 - 只显示三个指标
+    # 提取要在雷达图中显示的指标 - 显示所有自评估指标
     metrics = [
-        '关键词覆盖率', '长度比例', '简洁性'
+        '关键词覆盖率', '信息密度', '连贯性', 
+        '词汇丰富度', '长度比例', '简洁性'
     ]
     values = [
         scores['keyword_coverage'],
+        scores['information_density'],
+        scores['coherence'],
+        scores['lexical_diversity'],
         scores['length_ratio'], 
         scores['conciseness']
     ]
