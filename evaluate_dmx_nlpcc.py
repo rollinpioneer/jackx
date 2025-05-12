@@ -1,47 +1,36 @@
-
 # -*- coding: utf-8 -*-
 import json
-import torch
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import time
 from tqdm import tqdm
+from openai import OpenAI
 from together.evaluate_summary import evaluate_summary
 
-# 模型路径
-model_path = r"C:\Users\jackx\.cache\huggingface\hub\models--csebuetnlp--mT5_multilingual_XLSum\snapshots\2437a524effdbadc327ced84595508f1e32025b3"
+def setup_client():
+    """初始化DeepSeek API客户端"""
+    client = OpenAI(api_key="sk-a17fda1fa3bf42e186d7e3868c88f3a8", base_url="https://api.deepseek.com")
+    return client
 
-def load_model_and_tokenizer():
-    """加载mT5模型和分词器"""
-    print("正在加载分词器...")
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
-    
-    print("正在加载模型...")
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
-    
-    # 如果可用，将模型移至GPU
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-    print(f"模型已加载到 {device}")
-    
-    return model, tokenizer, device
-
-def generate_summary(text, model, tokenizer, device, max_length=150):
-    """使用mT5模型生成摘要"""
-    inputs = tokenizer(text, max_length=512, truncation=True, return_tensors="pt").to(device)
-    
-    # 生成摘要
-    with torch.no_grad():
-        summary_ids = model.generate(
-            inputs["input_ids"],
-            num_beams=4,
-            min_length=30,
-            max_length=max_length,
-            no_repeat_ngram_size=2,
-            early_stopping=True
-        )
-    
-    # 解码生成的摘要
-    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    return summary
+def generate_summary(text, client, max_retries=3, retry_delay=2):
+    """使用DeepSeek API生成摘要"""
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="deepseek-chat",
+                messages=[
+                    {"role": "system", "content": "你是一个专业的中文文本摘要助手，只输出简明摘要。"},
+                    {"role": "user", "content": f"请帮我对下面这段文本生成简明摘要：{text}"},
+                ],
+                stream=False
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            print(f"请求出错 (尝试 {attempt+1}/{max_retries}): {str(e)}")
+            if attempt < max_retries - 1:
+                print(f"等待 {retry_delay} 秒后重试...")
+                time.sleep(retry_delay)
+            else:
+                print("达到最大重试次数，返回空摘要")
+                return ""
 
 def load_nlpcc_data(file_path, num_samples):
     """从NLPCC数据集加载前n个样本"""
@@ -54,13 +43,14 @@ def load_nlpcc_data(file_path, num_samples):
     return data
 
 def main():
-    # 加载模型和分词器
-    model, tokenizer, device = load_model_and_tokenizer()
+    # 初始化DeepSeek API客户端
+    print("正在初始化DeepSeek API客户端...")
+    client = setup_client()
     
     # 加载NLPCC数据集
     print("正在加载NLPCC数据集...")
     dataset_path = "datasets/nlpcc_data.jsonl"
-    nlpcc_data = load_nlpcc_data(dataset_path, num_samples=50)
+    nlpcc_data = load_nlpcc_data(dataset_path, num_samples=50)  # 与mT5评估相同样本数
     
     # 初始化结果存储
     results = []
@@ -73,7 +63,7 @@ def main():
         reference = item["summary"]
         
         # 生成摘要
-        generated_summary = generate_summary(text, model, tokenizer, device)
+        generated_summary = generate_summary(text, client)
         
         # 使用ROUGE评估
         evaluation = evaluate_summary(generated_summary, reference)
@@ -86,6 +76,15 @@ def main():
             "rouge_l_f": evaluation["scores"]["rouge-l"]["f"]
         }
         results.append(result)
+        
+        # 每10个样本打印一次进度以及当前摘要示例
+        if i % 10 == 0:
+            print(f"\n示例 {i}:")
+            print(f"生成的摘要: {generated_summary[:100]}...")
+            print(f"参考摘要: {reference[:100]}...")
+        
+        # 请求之间添加短暂延迟，避免API请求过于频繁
+        time.sleep(0.5)
     
     # 计算平均分数
     avg_rouge1 = sum(r["rouge_1_f"] for r in results) / len(results)
@@ -113,9 +112,9 @@ def main():
     print(f"ROUGE-L F1: {avg_rougel*100:.2f}")
     
     # 将最终平均结果保存为JSON
-    with open("mt5_nlpcc_rouge_results.json", "w", encoding="utf-8") as f:
+    with open("dmx_nlpcc_rouge_results.json", "w", encoding="utf-8") as f:
         json.dump(final_results, f, ensure_ascii=False, indent=4)
-    print("ROUGE结果已保存至 mt5_nlpcc_rouge_results.json")
+    print("ROUGE结果已保存至 dmx_nlpcc_rouge_results.json")
 
 if __name__ == "__main__":
     main()
