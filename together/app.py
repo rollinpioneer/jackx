@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, url_for
+from flask import Flask, render_template, request, jsonify, url_for, send_file
 import subprocess
 import os
 import random
@@ -6,8 +6,15 @@ import re
 import json
 import sys
 from evaluate_summary import evaluate_from_file, evaluate_summary
-import docx2txt  # 新增：用于解析Word文档
+import docx2txt  # 用于解析Word文档
 from openai import OpenAI  # 导入OpenAI库用于调用DeepSeek API
+import tempfile
+from docx import Document  # 用于创建Word文档
+import uuid
+import time
+import threading
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
 
 app = Flask(__name__)
 app.static_folder = 'static'
@@ -25,6 +32,76 @@ ALLOWED_EXTENSIONS = {'docx', 'doc'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# 处理文本中空格的函数
+def clean_sentence_spaces(text):
+    if not text:
+        return ""
+    sentences = re.split('([。！？!?])', text)
+    result = ""
+    for i in range(0, len(sentences), 2):
+        if i < len(sentences):
+            current = sentences[i].strip()
+            if current:
+                result += current
+                if i+1 < len(sentences):
+                    result += sentences[i+1]
+    return result
+
+# 处理空白的函数 - 供批量摘要使用
+WHITESPACE_HANDLER = lambda k: re.sub('\s+', ' ', re.sub('\n+', ' ', k.strip()))
+
+# 加载Transformer模型供批量摘要使用 - 延迟加载模式
+transformer_model = None
+transformer_tokenizer = None
+
+def load_mt5_model():
+    global transformer_model, transformer_tokenizer
+    if transformer_model is None or transformer_tokenizer is None:
+        print("首次加载摘要模型...")
+        model_path = r"C:\Users\jackx\.cache\huggingface\hub\models--csebuetnlp--mT5_multilingual_XLSum\snapshots\2437a524effdbadc327ced84595508f1e32025b3"
+        transformer_tokenizer = AutoTokenizer.from_pretrained(model_path)
+        transformer_model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
+        
+        # 检查GPU可用性并将模型加载到GPU
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        transformer_model = transformer_model.to(device)
+        print(f"摘要模型已加载到 {device}")
+    return transformer_model, transformer_tokenizer
+
+# 生成单个文本的摘要
+def generate_summary_for_text(text):
+    # 确保模型已加载
+    model, tokenizer = load_mt5_model()
+    device = next(model.parameters()).device
+    
+    # 清理文本
+    text = clean_sentence_spaces(text)
+    
+    # 生成摘要
+    input_ids = tokenizer(
+        [WHITESPACE_HANDLER(text)],
+        return_tensors="pt",
+        padding="max_length",
+        truncation=True,
+        max_length=512
+    )["input_ids"].to(device)
+
+    output_ids = model.generate(
+        input_ids=input_ids,
+        max_length=84,
+        no_repeat_ngram_size=2,
+        num_beams=4
+    )[0]
+
+    summary = tokenizer.decode(
+        output_ids,
+        skip_special_tokens=True,
+        clean_up_tokenization_spaces=False
+    )
+    
+    # 清理生成摘要中每个句子前的空格
+    return clean_sentence_spaces(summary)
 
 @app.route('/')
 def index():
@@ -45,6 +122,93 @@ def encyclopedia():
 @app.route('/custom')
 def custom():
     return render_template('custom.html')
+
+# 批量文档摘要生成
+@app.route('/batch_summarize', methods=['POST'])
+def batch_summarize():
+    try:
+        # 检查是否有文件被上传
+        if 'files[]' not in request.files:
+            return jsonify({"status": "error", "message": "没有选择文件"}), 400
+        
+        files = request.files.getlist('files[]')
+        if not files or len(files) == 0 or files[0].filename == '':
+            return jsonify({"status": "error", "message": "没有选择文件"}), 400
+        
+        # 验证所有文件类型
+        for file in files:
+            if not allowed_file(file.filename):
+                return jsonify({
+                    "status": "error", 
+                    "message": f"文件 {file.filename} 不是有效的Word文档 (.doc, .docx)"
+                }), 400
+        
+        # 预先加载模型
+        load_mt5_model()
+        
+        # 创建临时目录存储上传的文件
+        temp_dir = tempfile.mkdtemp()
+        
+        # 创建结果文档
+        result_doc = Document()
+        result_doc.add_heading('批量文章摘要生成结果', 0)
+        
+        # 处理每个文件
+        for file in files:
+            # 保存上传的文件到临时路径
+            temp_file_path = os.path.join(temp_dir, file.filename)
+            file.save(temp_file_path)
+            
+            try:
+                # 提取Word文档内容
+                text_content = docx2txt.process(temp_file_path)
+                text_content = clean_sentence_spaces(text_content)
+                
+                # 生成摘要
+                summary = generate_summary_for_text(text_content)
+                
+                # 添加到结果文档
+                result_doc.add_heading(f'文件: {file.filename}', level=1)
+                
+                # 添加原文和摘要
+                result_doc.add_heading('原文:', level=2)
+                # 截取前500个字符作为预览，避免文档过大
+                preview_text = text_content[:500] + ('...' if len(text_content) > 500 else '')
+                result_doc.add_paragraph(preview_text)
+                
+                result_doc.add_heading('摘要:', level=2)
+                result_doc.add_paragraph(summary)
+                
+                # 添加分隔线
+                result_doc.add_paragraph('─' * 50)
+            
+            except Exception as e:
+                # 如果处理某个文件出错，添加错误信息到结果文档
+                result_doc.add_heading(f'文件: {file.filename}', level=1)
+                result_doc.add_paragraph(f'处理出错: {str(e)}', style='Intense Quote')
+                result_doc.add_paragraph('─' * 50)
+            
+            finally:
+                # 删除临时文件
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+        
+        # 保存结果文档到临时文件
+        result_file_path = os.path.join(temp_dir, f'摘要汇总_{uuid.uuid4().hex}.docx')
+        result_doc.save(result_file_path)
+        
+        # 返回文档文件
+        return send_file(
+            result_file_path,
+            as_attachment=True,
+            download_name='摘要汇总.docx',
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        )
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        return jsonify({"status": "error", "message": f"批量处理出错: {str(e)}\n{error_details}"}), 500
 
 # 新增：处理自定义文本处理请求
 @app.route('/process_custom_text', methods=['POST'])
@@ -646,20 +810,7 @@ def generate_encyclopedia_textrank():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
-# 清理文本空格的函数
-def clean_sentence_spaces(text):
-    if not text:
-        return ""
-    sentences = re.split('([。！？!?])', text)
-    result = ""
-    for i in range(0, len(sentences), 2):
-        if i < len(sentences):
-            current = sentences[i].strip()
-            if current:
-                result += current
-                if i+1 < len(sentences):
-                    result += sentences[i+1]
-    return result
-
 if __name__ == '__main__':
+    # 预先启动一个线程来加载模型，这样第一次批量处理时就不会太慢
+    threading.Thread(target=load_mt5_model).start()
     app.run(debug=True, port=5000)
