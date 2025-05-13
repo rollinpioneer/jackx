@@ -1,7 +1,7 @@
-
 # -*- coding: utf-8 -*-
 import json
 import torch
+import time
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from tqdm import tqdm
 from together.evaluate_summary import evaluate_summary
@@ -65,6 +65,9 @@ def main():
     # 初始化结果存储
     results = []
     
+    # 开始计时
+    start_time = time.time()
+    
     # 处理每个样本
     print(f"正在评估 {len(nlpcc_data)} 个样本...")
     for i, item in enumerate(tqdm(nlpcc_data)):
@@ -87,6 +90,10 @@ def main():
         }
         results.append(result)
     
+    # 计算总耗时
+    total_time = time.time() - start_time
+    print(f"\n总耗时: {total_time:.2f} 秒")
+    
     # 计算平均分数
     avg_rouge1 = sum(r["rouge_1_f"] for r in results) / len(results)
     avg_rouge2 = sum(r["rouge_2_f"] for r in results) / len(results)
@@ -103,7 +110,8 @@ def main():
         "rouge-l": {
             "f": float(avg_rougel * 100)
         },
-        "num_samples": len(results)
+        "num_samples": len(results),
+        "total_time": total_time
     }
     
     # 打印平均分数
